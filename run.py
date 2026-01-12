@@ -83,8 +83,22 @@ if __name__ == '__main__':
 
     parser.add_argument('--inverse', action='store_true', help='inverse output data', default=False)
 
+    parser.add_argument('--split_mode', type=str, default='ratio', choices=['ratio', 'date'])
+    parser.add_argument('--train_end', type=str, default='2022-12-31')
+    parser.add_argument('--val_start', type=str, default='2023-01-01')
+    parser.add_argument('--test_start', type=str, default='2024-01-01')
+
+    # date-split (walk-forward) extras
+    parser.add_argument('--test_end', type=str, default='2099-12-31')
+    parser.add_argument('--scaler_fit_mode', type=str, default='pre_test', choices=['pre_test', 'train_only'])
+    parser.add_argument('--debug_split', action='store_true')
+
+
     args = parser.parse_args()
-    args.use_gpu = True if torch.cuda.is_available() and args.use_gpu else False
+    # 支持 CUDA 或 MPS
+    args.use_gpu = True if args.use_gpu and (torch.cuda.is_available() or torch.backends.mps.is_available()) else False
+    args.use_mps = True if (args.use_gpu and (not torch.cuda.is_available()) and torch.backends.mps.is_available()) else False
+
 
     if args.use_gpu and args.use_multi_gpu:
         args.devices = args.devices.replace(' ', '')
@@ -124,7 +138,6 @@ if __name__ == '__main__':
 
             print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
             exp.test(setting)
-            torch.cuda.empty_cache()
     else:
         ii = 0
         setting = '{}_{}_{}_bs{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_ial{}_pdl{}_cal{}_df{}_eb{}_{}_{}'.format(

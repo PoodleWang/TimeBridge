@@ -131,9 +131,9 @@ class CointAttention(nn.Module):
         self.attention1 = attention
         self.attention2 = copy.deepcopy(attention)
 
-        self.num_rc = math.ceil((enc_in + 4) ** 0.5)
-        self.pad_ch = nn.ConstantPad1d(
-            (0, self.num_rc ** 2 - (enc_in + 4)), 0)
+        # self.num_rc = math.ceil((enc_in + 4) ** 0.5)
+        # self.pad_ch = nn.ConstantPad1d(
+        #     (0, self.num_rc ** 2 - (enc_in + 4)), 0)
 
         self.fc1 = nn.Linear(d_model, d_ff)
         self.fc2 = nn.Linear(d_ff, d_model)
@@ -159,15 +159,31 @@ class CointAttention(nn.Module):
     def axial_attn(self, x):
         b, c, n, d = x.shape
 
-        new_x = rearrange(x, 'b c n d -> (b n) c d')
-        new_x = (self.pad_ch(new_x.transpose(-1, -2))
-                 .transpose(-1, -2).reshape(-1, self.num_rc, d))
+        # flatten time dimension
+        new_x = rearrange(x, 'b c n d -> (b n) c d')  # [B*N, C, D]
+
+        # dynamically choose square grid for channels
+        num_rc = math.ceil((c) ** 0.5)               # smallest r s.t. r*r >= C
+        pad = num_rc * num_rc - c
+
+        # pad channel dimension (the 'C' axis) to num_rc^2
+        if pad > 0:
+            # ConstantPad1d pads last dimension of (N, C, L),
+            # so transpose to make channel axis the last dim
+            new_x = F.pad(new_x.transpose(-1, -2), (0, pad), value=0.0).transpose(-1, -2)
+
+        # reshape to [B*N*num_rc, num_rc, D]
+        new_x = new_x.reshape(-1, num_rc, d)
+
+        # axial attention: first along rows, then along cols
         new_x = self.attention1(new_x, new_x, new_x)[0]
-        new_x = rearrange(new_x, '(b r) c d -> (b c) r d', r=self.num_rc)
+        new_x = rearrange(new_x, '(b r) c d -> (b c) r d', r=num_rc)
         new_x = self.attention2(new_x, new_x, new_x)[0] + new_x
 
+        # back to [B, num_rc^2, N, D], then crop to original C
         new_x = rearrange(new_x, '(b n c) r d -> b (r c) n d', b=b, n=n)
         return new_x[:, :c, ...]
+
 
     def full_attn(self, x):
         b, c, n, d = x.shape

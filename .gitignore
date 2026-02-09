@@ -161,3 +161,19 @@ cython_debug/
 #.idea/
 
 .DS_Store
+
+# TimeBridge local artifacts
+.vscode/
+data/
+download/
+eval/
+logs/
+metatrader_timebridge_rl_cov/
+out/
+results/
+*.npz
+*.pt
+*.pdf
+outputs.txt
+result_long_term_forecast.txt
+step.txt
